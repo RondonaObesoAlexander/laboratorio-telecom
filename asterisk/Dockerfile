@@ -17,11 +17,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Descargar y descomprimir Asterisk
-RUN wget http://downloads.asterisk.org/pub/telephony/asterisk/asterisk-${ASTERISK_VERSION}-current.tar.gz \
-    && tar -xzf asterisk-${ASTERISK_VERSION}-current.tar.gz \
+RUN wget http://downloads.asterisk.org/pub/telephony/asterisk/releases/asterisk-${ASTERISK_VERSION}.tar.gz \
+    && tar -xzf asterisk-${ASTERISK_VERSION}.tar.gz \
     && cd asterisk-${ASTERISK_VERSION} \
     && ./configure --with-pjproject-bundled --with-mysql=yes
-
+    
 # Seleccionar módulos (PJSIP, CDR MySQL, HTTP/ARI)
 RUN cd asterisk-${ASTERISK_VERSION} \
     && make menuselect.makeopts \

@@ -21,28 +21,31 @@ services:
       retries: 10
 
   midpoint:
-    image: evolveum/midpoint:${MIDPOINT_VERSION}
-    container_name: telecom-midpoint
-    ports:
-      - "8080:8080"
-    environment:
-      MIDPOINT_REPOSITORY_TYPE: mysql
-      MIDPOINT_REPOSITORY_HOST: db
-      MIDPOINT_REPOSITORY_PORT: 3306
-      MIDPOINT_REPOSITORY_DATABASE: ${MYSQL_DATABASE}
-      MIDPOINT_REPOSITORY_USERNAME: ${MYSQL_USER}
-      MIDPOINT_REPOSITORY_PASSWORD: ${MYSQL_PASSWORD}
-      MIDPOINT_REPOSITORY_URL: "jdbc:mysql://db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
-      MIDPOINT_JDBC_DRIVER: org.mariadb.jdbc.Driver
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - midpoint_home:/opt/midpoint/var
-      - ./midpoint/resources:/opt/midpoint/var/import
-    networks:
-      - telecom-net
-    restart: unless-stopped
+  image: evolveum/midpoint:${MIDPOINT_VERSION}
+  container_name: telecom-midpoint
+  ports:
+    - "8080:8080"
+  environment:
+    # Variables para conectar a MariaDB
+    MIDPOINT_REPOSITORY_TYPE: mysql
+    MIDPOINT_REPOSITORY_HOST: db
+    MIDPOINT_REPOSITORY_PORT: 3306
+    MIDPOINT_REPOSITORY_DATABASE: ${MYSQL_DATABASE}
+    MIDPOINT_REPOSITORY_USERNAME: ${MYSQL_USER}
+    MIDPOINT_REPOSITORY_PASSWORD: ${MYSQL_PASSWORD}
+    MIDPOINT_REPOSITORY_JDBC_URL: "jdbc:mariadb://db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+    # Desactivar la base de datos H2 embebida
+    MIDPOINT_USE_EMBEDDED_DB: "false"
+    MIDPOINT_START_EMBEDDED_DB: "false"
+  depends_on:
+    db:
+      condition: service_healthy
+  volumes:
+    - midpoint_home:/opt/midpoint/var
+    - ./midpoint/resources:/opt/midpoint/var/import
+  networks:
+    - telecom-net
+  restart: unless-stopped
 
   asterisk:
     build:

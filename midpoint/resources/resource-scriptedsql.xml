@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+          oid="10000000-0000-0000-0000-000000000002"
+          xmlns:c="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+          xmlns:ri="http://midpoint.evolveum.com/xml/ns/public/resource/instance-3">
+
+    <name>Recurso ScriptedSQL - Clientes Call Center</name>
+    <description>Recurso que lee la tabla clients desde MariaDB</description>
+
+    <!-- ============================================================ -->
+    <!-- CONFIGURACIÓN DEL CONECTOR SCRIPTEDSQL                       -->
+    <!-- ============================================================ -->
+    <connectorRef oid="10000000-0000-0000-0000-000000000003" type="ConnectorType"/>
+
+    <connectorConfiguration>
+        <!-- Driver JDBC para MariaDB -->
+        <jdbcDriver>org.mariadb.jdbc.Driver</jdbcDriver>
+        <jdbcUrlTemplate>jdbc:mariadb://db:3306/midpoint_db</jdbcUrlTemplate>
+        <user>reader_user</user>
+        <password>reader_pass</password>
+
+        <!-- Scripts Groovy para cada operación -->
+        <createScriptFile>CreateScript.groovy</createScriptFile>
+        <updateScriptFile>UpdateScript.groovy</updateScriptFile>
+        <deleteScriptFile>DeleteScript.groovy</deleteScriptFile>
+        <searchScriptFile>SearchScript.groovy</searchScriptFile>
+    </connectorConfiguration>
+
+    <!-- ============================================================ -->
+    <!-- DEFINICIÓN DE LA ESTRUCTURA DE LA TABLA                      -->
+    <!-- ============================================================ -->
+    <schemaHandling>
+        <objectType>
+            <kind>account</kind>
+            <intent>callCenterAgent</intent>
+            <objectClass>ri:AccountObjectClass</objectClass>
+
+            <!-- Atributos que midPoint leerá de la tabla -->
+            <attribute>
+                <ref>ri:username</ref>
+                <displayName>Nombre de usuario</displayName>
+                <schemaAttributeRef>ri:username</schemaAttributeRef>
+                <outbound>
+                    <source>
+                        <path>$user/name</path>
+                    </source>
+                </outbound>
+            </attribute>
+
+            <attribute>
+                <ref>ri:fullName</ref>
+                <displayName>Nombre completo</displayName>
+                <schemaAttributeRef>ri:fullName</schemaAttributeRef>
+                <outbound>
+                    <source>
+                        <path>$user/fullName</path>
+                    </source>
+                </outbound>
+            </attribute>
+
+            <attribute>
+                <ref>ri:phoneExtension</ref>
+                <displayName>Extensión SIP</displayName>
+                <schemaAttributeRef>ri:phoneExtension</schemaAttributeRef>
+                <outbound>
+                    <source>
+                        <path>$user/phoneExtension</path>
+                    </source>
+                </outbound>
+            </attribute>
+
+            <attribute>
+                <ref>ri:active</ref>
+                <displayName>Activo</displayName>
+                <schemaAttributeRef>ri:active</schemaAttributeRef>
+                <outbound>
+                    <source>
+                        <path>$user/active</path>
+                    </source>
+                </outbound>
+            </attribute>
+        </objectType>
+    </schemaHandling>
+
+    <!-- ============================================================ -->
+    <!-- CONFIGURACIÓN DE SINCRONIZACIÓN                              -->
+    <!-- ============================================================ -->
+    <synchronization>
+        <objectSynchronization>
+            <name>Sincronización Agentes Call Center</name>
+            <objectClass>ri:AccountObjectClass</objectClass>
+            <kind>account</kind>
+            <intent>callCenterAgent</intent>
+            <focusType>c:UserType</focusType>
+
+            <!-- Correlación: buscar usuario en midPoint por nombre de usuario -->
+            <correlation>
+                <correlationRule>
+                    <q:equal xmlns:q="http://prism.evolveum.com/xml/ns/public/query-3">
+                        <q:path>name</q:path>
+                        <q:expression>
+                            <path>$account/username</path>
+                        </q:expression>
+                    </q:equal>
+                </correlationRule>
+            </correlation>
+
+            <!-- ======================================================== -->
+            <!-- REACCIONES SEGÚN LA SITUACIÓN DE SINCRONIZACIÓN         -->
+            <!-- ======================================================== -->
+            <reaction>
+                <situation>linked</situation>
+                <action>
+                    <type>update</type>
+                </action>
+            </reaction>
+
+            <reaction>
+                <situation>unlinked</situation>
+                <action>
+                    <type>create</type>
+                </action>
+            </reaction>
+
+            <reaction>
+                <situation>deleted</situation>
+                <action>
+                    <type>delete</type>
+                </action>
+            </reaction>
+
+            <!-- ======================================================== -->
+            <!-- SCRIPT DE APROVISIONAMIENTO PARA ASTERISK               -->
+            <!-- ======================================================== -->
+            <!-- Este script se ejecuta ANTES de que el usuario sea creado -->
+            <beforeCreate>
+                <script>
+                    <code>
+                        <![CDATA[
+                            import groovy.sql.Sql
+                            import java.util.logging.Logger
+
+                            // Obtener parámetros del usuario
+                            def username = account.getAttributeValue('username')
+                            def extension = account.getAttributeValue('phoneExtension')
+                            def fullName = account.getAttributeValue('fullName')
+
+                            log.info("=== APROVISIONANDO EXTENSIÓN SIP EN ASTERISK ===")
+                            log.info("Usuario: ${username}")
+                            log.info("Extensión: ${extension}")
+                            log.info("Nombre: ${fullName}")
+
+                            // =========================================================
+                            // OPCIÓN 1: Ejecutar script externo vía SSH (recomendado)
+                            // =========================================================
+                            // Se necesita el conector SSH para ejecutar comandos en Asterisk
+                            // El conector SSH permite ejecutar scripts de aprovisionamiento
+                            // mediante el protocolo SSH[reference:1]
+                            //
+                            // def command = """
+                            //     /usr/local/bin/add_sip_extension.sh ${extension} ${username} "${fullName}"
+                            // """
+                            // def process = command.execute()
+                            // def output = process.text
+                            // log.info("Salida del script: ${output}")
+
+                            // =========================================================
+                            // OPCIÓN 2: Escribir directamente en pjsip.conf (vía montaje)
+                            // =========================================================
+                            // Dado que el directorio /etc/asterisk está montado como volumen
+                            // en el contenedor de Asterisk, podemos escribir directamente
+                            def pjsipPath = "/etc/asterisk/pjsip.conf"
+                            def newEndpoint = """
+
+                            [${extension}]
+                            type=endpoint
+                            context=default
+                            disallow=all
+                            allow=ulaw
+                            allow=alaw
+                            auth=${extension}-auth
+                            aors=${extension}
+
+                            [${extension}-auth]
+                            type=auth
+                            auth_type=userpass
+                            password=${username}123
+                            username=${extension}
+
+                            [${extension}]
+                            type=aor
+                            max_contacts=1
+                            """
+
+                            // Leer el archivo actual y agregar el nuevo endpoint
+                            def file = new File(pjsipPath)
+                            if (file.exists()) {
+                                def content = file.text
+                                // Verificar si la extensión ya existe
+                                if (!content.contains("[${extension}]")) {
+                                    file.append(newEndpoint)
+                                    log.info("✅ Extensión ${extension} agregada a ${pjsipPath}")
+                                } else {
+                                    log.info("⚠️ La extensión ${extension} ya existe")
+                                }
+                            } else {
+                                log.warning("❌ No se encuentra el archivo ${pjsipPath}")
+                            }
+
+                            // =========================================================
+                            // OPCIÓN 3: Llamar a la API REST de Asterisk (ARI)
+                            // =========================================================
+                            // def url = "http://asterisk:8088/ari/endpoints"
+                            // // ... implementar llamada REST
+
+                            log.info("=== FIN APROVISIONAMIENTO ===")
+                        ]]>
+                    </code>
+                </script>
+            </beforeCreate>
+
+            <!-- Script que se ejecuta DESPUÉS de crear el usuario -->
+            <afterCreate>
+                <script>
+                    <code>
+                        <![CDATA[
+                            log.info("✅ Usuario creado exitosamente en midPoint")
+                            // Aquí se podría recargar la configuración de Asterisk
+                            // "asterisk -rx 'module reload'"
+                        ]]>
+                    </code>
+                </script>
+            </afterCreate>
+
+        </objectSynchronization>
+    </synchronization>
+
+</resource>

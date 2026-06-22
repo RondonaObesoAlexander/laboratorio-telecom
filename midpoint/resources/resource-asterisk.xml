@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource xmlns="http://midpoint.evolveum.com/xml/ns/public/common/common-3"
+          oid="10000000-0000-0000-0000-000000000001">
+    <name>Recurso Asterisk PBX</name>
+    <description>Recurso para provisionar cuentas SIP vía ARI</description>
+    <connectorRef oid="10000000-0000-0000-0000-000000000002" type="ConnectorType"/>
+    <connectorConfiguration>
+        <!-- Este es un esqueleto. La implementación real usa REST Connector.
+             Aquí definimos la URL base del ARI de Asterisk -->
+        <host>localhost</host> <!-- Como está en host network, localhost funciona -->
+        <port>8088</port>
+        <username>${ASTERISK_ADMIN_USER}</username>
+        <password>${ASTERISK_ADMIN_PASS}</password>
+    </connectorConfiguration>
+    <schemaHandling>
+        <objectType>
+            <kind>account</kind>
+            <intent>sipUser</intent>
+            <attribute>
+                <ref>ri:username</ref>
+                <outbound>
+                    <strength>strong</strength>
+                    <expression>
+                        <path>$user/extension</path>
+                    </expression>
+                </outbound>
+            </attribute>
+            <attribute>
+                <ref>ri:password</ref>
+                <outbound>
+                    <strength>strong</strength>
+                    <expression>
+                        <path>$user/credentials/password</path>
+                    </expression>
+                </outbound>
+            </attribute>
+        </objectType>
+    </schemaHandling>
+</resource>

@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. BASE DE DATOS (MariaDB 10.6)
+  # ==========================================
+  db:
+    image: mariadb:10.6
+    container_name: telecom-db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootSup3rS3cr3t
+      MYSQL_DATABASE: midpoint_db
+      MYSQL_USER: midpoint_user
+      MYSQL_PASSWORD: midpoint_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql  # Script de arranque
+    networks:
+      - telecom-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # ==========================================
+  # 2. MIDPOINT (IAM) - Puerto 8080
+  # ==========================================
+  midpoint:
+    image: evolveum/midpoint:latest   # Puedes fijar versión ej: 4.8
+    container_name: telecom-midpoint
+    ports:
+      - "8080:8080"   # Exposición en el puerto solicitado
+    environment:
+      # Configuración para conectar con MariaDB (midPoint usa dialecto MySQL)
+      MIDPOINT_REPOSITORY_TYPE: mysql
+      MIDPOINT_REPOSITORY_HOST: db
+      MIDPOINT_REPOSITORY_PORT: 3306
+      MIDPOINT_REPOSITORY_DATABASE: midpoint_db
+      MIDPOINT_REPOSITORY_USERNAME: midpoint_user
+      MIDPOINT_REPOSITORY_PASSWORD: midpoint_pass
+      # Ajuste extra para que midPoint use la URL correcta con MariaDB
+      MIDPOINT_REPOSITORY_URL: "jdbc:mysql://db:3306/midpoint_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      MIDPOINT_JDBC_DRIVER: org.mariadb.jdbc.Driver
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - midpoint_home:/opt/midpoint/var
+      - ./midpoint/resources:/opt/midpoint/var/import   # Para cargar XMLs
+    networks:
+      - telecom-net
+    restart: unless-stopped
+
+  # ==========================================
+  # 3. ASTERISK (PBX Personalizada) - SIP/RTP
+  # ==========================================
+  asterisk:
+    build:
+      context: ./asterisk
+      dockerfile: Dockerfile
+    container_name: telecom-asterisk
+    ports:
+      - "5060:5060/udp"          # SIP UDP (obligatorio)
+      - "5060:5060/tcp"          # SIP TCP (opcional, para mejor compatibilidad)
+      - "10000-10100:10000-10100/udp"   # Rango RTP solicitado
+    volumes:
+      - ./asterisk/configs:/etc/asterisk
+      - asterisk_logs:/var/log/asterisk
+      - asterisk_data:/var/lib/asterisk
+    depends_on:
+      - midpoint   # Depende de que midPoint esté levantado (para obtener usuarios vía REST)
+    networks:
+      - telecom-net
+    restart: unless-stopped
+    # NOTA: Para que Asterisk resuelva "midpoint" como hostname, usamos la red bridge.
+
+# ==========================================
+# VOLÚMENES PERSISTENTES
+# ==========================================
+volumes:
+  db_data:
+  midpoint_home:
+  asterisk_logs:
+  asterisk_data:
+
+# ==========================================
+# RED INTERNA
+# ==========================================
+networks:
+  telecom-net:
+    driver: bridge

@@ -3,7 +3,7 @@
 # ===================================================
 FROM debian:bullseye AS builder
 
-ARG ASTERISK_VERSION=18
+ARG ASTERISK_VERSION=18.26.0
 
 # Instalar dependencias de compilación
 RUN apt-get update && apt-get install -y \
@@ -21,8 +21,8 @@ RUN wget http://downloads.asterisk.org/pub/telephony/asterisk/releases/asterisk-
     && tar -xzf asterisk-${ASTERISK_VERSION}.tar.gz \
     && cd asterisk-${ASTERISK_VERSION} \
     && ./configure --with-pjproject-bundled --with-mysql=yes
-    
-# Seleccionar módulos (PJSIP, CDR MySQL, HTTP/ARI)
+
+# Seleccionar módulos
 RUN cd asterisk-${ASTERISK_VERSION} \
     && make menuselect.makeopts \
     && menuselect/menuselect --enable chan_pjsip \
@@ -39,7 +39,6 @@ RUN cd asterisk-${ASTERISK_VERSION} \
 # ===================================================
 FROM debian:bullseye
 
-# Instalar librerías necesarias en tiempo de ejecución
 RUN apt-get update && apt-get install -y \
     libssl1.1 libxml2 libjansson4 \
     libedit2 libsqlite3-0 \
@@ -53,11 +52,13 @@ COPY --from=builder /usr/lib/asterisk /usr/lib/asterisk
 COPY --from=builder /etc/asterisk /etc/asterisk-base
 COPY --from=builder /var/lib/asterisk /var/lib/asterisk-base
 
-# Creamos directorio para configuración montada
+# Copiar explícitamente la librería SSL
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libasteriskssl.so.1 /usr/lib/x86_64-linux-gnu/
+
+# Crear directorios necesarios
 RUN mkdir -p /etc/asterisk /var/log/asterisk /var/run/asterisk
 
-# Exponer puertos (documentación)
+# Exponer puertos
 EXPOSE 5060/udp 5060/tcp 10000-10100/udp
 
-# Iniciar Asterisk en foreground con logs detallados
 CMD ["asterisk", "-f", "-vvv", "-c"]

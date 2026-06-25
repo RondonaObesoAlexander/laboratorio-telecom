@@ -44,3 +44,29 @@ El sistema se compone de los siguientes bloques lógicos:
 ---
 
 ### 📂 Estructura del Proyecto
+laboratorio-telecom/
+├── .env # Variables de entorno (credenciales, versiones)
+├── docker-compose.yml # Orquestación de servicios
+├── asterisk/ # Configuración de Asterisk
+│ ├── Dockerfile
+│ └── configs/
+│ ├── pjsip.conf
+│ ├── extensions.conf
+│ ├── rtp.conf
+│ └── http.conf
+├── midpoint/ # Recursos de midPoint
+│ └── resources/
+│ ├── resource-scriptedsql.xml
+│ ├── CreateScript.groovy
+│ ├── SearchScript.groovy
+│ └── UpdateScript.groovy
+└── db/
+└── init.sql # Inicialización de la base de datos
+
+---
+
+### 🔧 Instrucciones de Instalación y Ejecución
+1. **Clonar el repositorio**:
+   ```bash
+   git clone https://github.com/RondonaObesoAlexander/laboratorio-telecom.git
+   cd laboratorio-telecom
